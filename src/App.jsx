@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import './App.css';
 
 const initialBoards = {
@@ -37,18 +37,21 @@ const initialBoards = {
   ],
 };
 
-
 function App() {
   const [board, setBoard] = useState(initialBoards.easy.map(row => [...row]));
-  const [solving, setSolving] = useState(false);
-  const [speed, setSpeed] = useState(50);
   const [difficulty, setDifficulty] = useState('easy');
-  const [stop, setStop] = useState(false);
+  const [speed, setSpeed] = useState('medium');
+  const stopRef = useRef(false);
+
+  useEffect(() => {
+    const initialBoard = initialBoards[difficulty].map(row => [...row]);
+    console.log("Initial Board:", initialBoard); // Debugging line
+    setBoard(initialBoard);
+  }, [difficulty]);
 
   const isValid = (board, row, col, num) => {
     for (let i = 0; i < 9; i++) {
-      if (board[row][i] === num) return false;
-      if (board[i][col] === num) return false;
+      if (board[row][i] === num || board[i][col] === num) return false;
       const boxRow = 3 * Math.floor(row / 3) + Math.floor(i / 3);
       const boxCol = 3 * Math.floor(col / 3) + (i % 3);
       if (board[boxRow][boxCol] === num) return false;
@@ -56,88 +59,95 @@ function App() {
     return true;
   };
 
+  const getSpeedValue = () => {
+    switch (speed) {
+      case 'instant':
+        return 0;
+      case 'medium':
+        return 25;
+      case 'fast':
+        return 10;
+      case 'slow':
+        return 50;
+      default:
+        return 100;
+    }
+  };
+
   const solveSudoku = async (board) => {
-    setStop(false);
-    const sleep = () => new Promise(resolve => setTimeout(resolve, speed));
-    
-    const solve = async (row = 0, col = 0) => {
-      if (stop) return false;
-      if (row === 9) return true;
-      if (col === 9) return await solve(row + 1, 0);
-      if (board[row][col] !== 0) return await solve(row, col + 1);
-
-      for (let num = 1; num <= 9; num++) {
-        if (isValid(board, row, col, num)) {
-          const newBoard = [...board];
-          newBoard[row][col] = num;
-          setBoard(newBoard);
-          await sleep();
-
-          if (await solve(row, col + 1)) return true;
-
-          newBoard[row][col] = 0;
-          setBoard([...newBoard]);
-          await sleep();
+    const sleep = () => new Promise(resolve => setTimeout(resolve, getSpeedValue()));
+  
+    const solve = async () => {
+      if (stopRef.current) return false;
+  
+      for (let row = 0; row < 9; row++) {
+        for (let col = 0; col < 9; col++) {
+          if (board[row][col] === 0) {
+            for (let num = 1; num <= 9; num++) {
+              if (stopRef.current) return false;
+              if (isValid(board, row, col, num)) {
+                board[row][col] = num;
+                if (speed !== 'instant') {
+                  setBoard([...board.map(r => [...r])]);
+                  await sleep();
+                }
+                if (await solve()) return true;
+                board[row][col] = 0;
+                if (speed !== 'instant') {
+                  setBoard([...board.map(r => [...r])]);
+                  await sleep();
+                }
+              }
+            }
+            return false;
+          }
         }
       }
-      return false;
+      return true;
     };
-    return await solve();
+  
+    stopRef.current = false;
+    await solve();
+  
+    if (speed === 'instant' && !stopRef.current) {
+      setBoard([...board.map(r => [...r])]);
+     
+    } else if (!stopRef.current) {
+      alert("Sudoku solved!");
+    }
   };
-
-  const handleSolve = async () => {
-    if (solving) return;
-    setSolving(true);
-    const solved = await solveSudoku(board);
-    if (solved) alert('Sudoku solved!');
-    else alert('No solution found!');
-    setSolving(false);
-  };
-
-  const handleStop = () => {
-    setStop(true);
-    setSolving(false);
-  };
-
-  const handleReset = () => {
-    setBoard(initialBoards[difficulty].map(row => [...row]));
-    setStop(true);
-    setSolving(false);
-  };
+  
 
   return (
     <div className="App">
       <h1>Sudoku Solver</h1>
+      <div className="board">
+        {board.map((row, rIdx) => (
+          <div key={rIdx} className="row">
+            {row.map((cell, cIdx) => (
+              <div key={cIdx} className="cell">{cell !== 0 ? cell : ''}</div>
+            ))}
+          </div>
+        ))}
+      </div>
       <div className="controls">
         <select value={difficulty} onChange={(e) => setDifficulty(e.target.value)}>
           <option value="easy">Easy</option>
           <option value="medium">Medium</option>
           <option value="hard">Hard</option>
         </select>
-        <button onClick={handleSolve} disabled={solving}>Solve</button>
-        <button onClick={handleStop} disabled={!solving}>Stop</button>
-        <button onClick={handleReset}>Reset</button>
-        <div className="speed-control">
+        <button onClick={() => solveSudoku([...board.map(row => [...row])])}>Solve</button>
+        <button onClick={() => setBoard(initialBoards[difficulty].map(row => [...row]))}>Reset</button>
+        <button onClick={() => { stopRef.current = true }}>Stop</button>
+        <div className="speed-controls">
           <label>Speed:</label>
-          <input
-            type="range"
-            min="1"
-            max="500"
-            value={speed}
-            onChange={(e) => setSpeed(parseInt(e.target.value))}
-          />
+          <select value={speed} onChange={(e) => setSpeed(e.target.value)}>
+            <option value="instant">Instant</option>
+            <option value="slow">Slow</option>
+            <option value="medium">Medium</option>
+            <option value="fast">Fast</option>
+          </select>
         </div>
-      </div>
-      <div className="sudoku-board">
-        {board.map((row, rowIndex) => (
-          <div key={rowIndex} className="row">
-            {row.map((cell, colIndex) => (
-              <div key={colIndex} className={`cell ${cell !== 0 ? 'filled' : ''}`}>
-                {cell || ''}
-              </div>
-            ))}
-          </div>
-        ))}
       </div>
     </div>
   );
