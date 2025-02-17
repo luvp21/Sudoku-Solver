@@ -45,9 +45,27 @@ function App() {
 
   useEffect(() => {
     const initialBoard = initialBoards[difficulty].map(row => [...row]);
-    console.log("Initial Board:", initialBoard); // Debugging line
     setBoard(initialBoard);
   }, [difficulty]);
+
+  const handleCellChange = (row, col, value) => {
+    const lastChar = value.slice(-1);
+    let newValue;
+    
+    if (lastChar === '') {
+      newValue = 0;
+    } else {
+      const num = parseInt(lastChar, 10);
+      if (isNaN(num) || num < 1 || num > 9) return;
+      newValue = num;
+    }
+
+    const newBoard = board.map((rowArray, r) =>
+      r === row ? rowArray.map((cell, c) => (c === col ? newValue : cell)) : rowArray
+    );
+    setBoard(newBoard);
+  };
+
 
   const isValid = (board, row, col, num) => {
     for (let i = 0; i < 9; i++) {
@@ -125,7 +143,15 @@ function App() {
         {board.map((row, rIdx) => (
           <div key={rIdx} className="row">
             {row.map((cell, cIdx) => (
-              <div key={cIdx} className="cell">{cell !== 0 ? cell : ''}</div>
+              <input
+                key={cIdx}
+                className="cell"
+                value={cell !== 0 ? cell : ''}
+                onChange={(e) => handleCellChange(rIdx, cIdx, e.target.value)}
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
+              />
             ))}
           </div>
         ))}
